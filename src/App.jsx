@@ -14,12 +14,12 @@ const ACTION_WEBHOOK = "https://discord.com/api/webhooks/1499763359783059626/ZHT
 // 👉 請將你從 Firebase 複製的設定貼在這裡：
 // ============================================================================
 const firebaseConfig = {
-  // apiKey: "...",
-  // authDomain: "...",
-  // projectId: "...",
-  // storageBucket: "...",
-  // messagingSenderId: "...",
-  // appId: "..."
+  apiKey: "AIzaSyC3OyRHBo7iz2uU0udL60ru99CQZCk1b0A",
+  authDomain: "phpfarmer.firebaseapp.com",
+  projectId: "phpfarmer",
+  storageBucket: "phpfarmer.firebasestorage.app",
+  messagingSenderId: "933405127775",
+  appId: "1:933405127775:web:921af7a7f513cd72c817ea"
 };
 
 // 初始化 Firebase
