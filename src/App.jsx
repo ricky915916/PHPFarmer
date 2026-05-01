@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  Users, UserPlus, CheckCircle2, ShieldAlert, Award, Briefcase, Plus, DollarSign, Globe
+  Users, UserPlus, CheckCircle2, ShieldAlert, Award, Briefcase, Plus, DollarSign, Globe, Trash2
 } from 'lucide-react';
 // 引入 Firebase
 import { initializeApp } from 'firebase/app';
@@ -11,15 +11,15 @@ const LOG_WEBHOOK = "https://discord.com/api/webhooks/1499763356540604550/mjn_Md
 const ACTION_WEBHOOK = "https://discord.com/api/webhooks/1499763359783059626/ZHT9MIQHuhX1pjjC_HUOwxmNxFintLYfeQf3ydfjYYtePh27vxXzRJstuG0dVoceO_f-";
 
 // ============================================================================
-// 👉 請將你剛剛從 Firebase 複製的設定貼在這裡：
+// 👉 請將你從 Firebase 複製的設定貼在這裡：
 // ============================================================================
 const firebaseConfig = {
-  apiKey: "AIzaSyC3OyRHBo7iz2uU0udL60ru99CQZCk1b0A",
-  authDomain: "phpfarmer.firebaseapp.com",
-  projectId: "phpfarmer",
-  storageBucket: "phpfarmer.firebasestorage.app",
-  messagingSenderId: "933405127775",
-  appId: "1:933405127775:web:921af7a7f513cd72c817ea"
+  // apiKey: "...",
+  // authDomain: "...",
+  // projectId: "...",
+  // storageBucket: "...",
+  // messagingSenderId: "...",
+  // appId: "..."
 };
 
 // 初始化 Firebase
@@ -35,7 +35,7 @@ const actionWebhook = (msg) => {
   fetch(ACTION_WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: msg }) }).catch(console.error);
 };
 
-// --- 共用 UI 元件 (與之前相同) ---
+// --- 共用 UI 元件 ---
 const GlassCard = ({ children, className = '' }) => (
   <div className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl ${className}`}>{children}</div>
 );
@@ -90,7 +90,7 @@ const AddHourInline = ({ onAdd }) => {
 
 // --- 主應用程式 ---
 export default function App() {
-  const [users, setUsers] = useState([]); // 改為空陣列，等待 Firebase 讀取
+  const [users, setUsers] = useState([]);
   const [newUser, setNewUser] = useState({ name: '', role: 'employee', managerId: '', cutPercentage: 10, hourlyWage: 100 });
   const [modal, setModal] = useState({ isOpen: false, user: null });
   const [exchangeRate, setExchangeRate] = useState(null);
@@ -154,6 +154,31 @@ export default function App() {
     } catch (error) {
       console.error("新增失敗:", error);
       alert("新增失敗，請檢查權限設定");
+    }
+  };
+
+  // 刪除人員
+  const handleDeleteUser = async (user) => {
+    // 經理防呆機制：底下還有員工不能刪
+    if (user.role === 'manager') {
+      const hasEmployees = users.some(u => u.role === 'employee' && u.managerId === user.id);
+      if (hasEmployees) {
+        return alert('無法刪除！\n\n這個經理底下還有綁定的員工，請先刪除那些員工，或是將他們轉移給其他經理。');
+      }
+    }
+
+    // 二度確認
+    if (!window.confirm(`確定要刪除「${user.name}」嗎？\n\n注意：刪除後資料將無法復原！`)) {
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'users', user.id));
+      logWebhook(`刪除人員: ${user.name} (${user.role})`);
+      actionWebhook(`🗑️ **刪除人員**\n> 名字：${user.name}\n> 角色：${user.role === 'manager' ? '經理' : '員工'}`);
+    } catch (error) {
+      console.error("刪除失敗:", error);
+      alert("刪除失敗，請檢查權限設定");
     }
   };
 
@@ -338,29 +363,40 @@ export default function App() {
                       <div className="flex items-center space-x-2 bg-black/20 p-1 pl-3 rounded-xl border border-white/5"><span className="text-xs text-gray-400 shrink-0">時薪</span><TrackedInput className="text-emerald-300" value={manager.hourlyWage} onChange={v => handleUpdateField(manager.id, 'hourlyWage', v)} onCommitChange={(oldV, newV) => logWebhook(`修改: 經理 ${manager.name} 時薪由 ${oldV} 改為 ${newV}`)} suffix="PHP" /></div>
                       <AddHourInline onAdd={h => handleAddHours(manager.id, h)} />
                       <div className="flex items-center space-x-2"><span className="text-sm text-gray-400 shrink-0">時數</span><TrackedInput className="text-yellow-400 font-bold" value={manager.pendingHours} onChange={v => handleUpdateField(manager.id, 'pendingHours', v)} onCommitChange={(oldV, newV) => logWebhook(`修改: 經理 ${manager.name} 總時數由 ${oldV} 改為 ${newV}`)} suffix="h" /></div>
+                      
                       <button onClick={() => openSettleModal(manager)} className="p-2.5 bg-green-500/20 text-green-400 hover:bg-green-500/30 rounded-xl transition-all shrink-0" title="結算經理時數與紅利"><CheckCircle2 className="w-5 h-5" /></button>
+                      <button onClick={() => handleDeleteUser(manager)} className="p-2.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl transition-all shrink-0 ml-1" title="刪除經理"><Trash2 className="w-5 h-5" /></button>
                     </div>
                   </div>
                   {/* 員工列 */}
                   <div className="p-2">
                     {teamEmployees.length === 0 ? (<div className="px-5 py-3 text-sm text-gray-500">尚無員工</div>) : (
                       <div className="space-y-1">
-                        {teamEmployees.map(employee => (
-                          <div key={employee.id} className="flex items-center justify-between p-3 px-4 sm:px-6 rounded-2xl hover:bg-white/5 transition-colors gap-4 overflow-x-auto">
-                            <div className="flex items-center gap-3 shrink-0">
-                              <div className="flex items-center space-x-2"><Users className="w-5 h-5 text-gray-400 shrink-0" /><span className="font-medium whitespace-nowrap">{employee.name}</span></div>
-                              <div className="flex items-center gap-2 border-l border-white/10 pl-3">
-                                <div className="flex items-center space-x-1"><span className="text-xs text-gray-400 shrink-0">時薪</span><TrackedInput className="text-emerald-300" value={employee.hourlyWage} onChange={v => handleUpdateField(employee.id, 'hourlyWage', v)} onCommitChange={(oldV, newV) => logWebhook(`修改: 員工 ${employee.name} 時薪由 ${oldV} 改為 ${newV}`)} suffix="PHP" /></div>
-                                <div className="flex items-center space-x-1"><span className="text-xs text-gray-400 shrink-0">抽成</span><TrackedInput className="text-purple-300" value={employee.cutPercentage} onChange={v => handleUpdateField(employee.id, 'cutPercentage', v)} onCommitChange={(oldV, newV) => logWebhook(`修改: 員工 ${employee.name} 抽成由 ${oldV}% 改為 ${newV}%`)} suffix="%" /></div>
+                        {teamEmployees.map(employee => {
+                          // 判斷時數是否>=150，是的話加上紅色邊框與光暈
+                          const isOvertime = employee.pendingHours >= 150;
+                          
+                          return (
+                            <div key={employee.id} className={`flex items-center justify-between p-3 px-4 sm:px-6 rounded-2xl hover:bg-white/5 transition-colors gap-4 overflow-x-auto border ${isOvertime ? 'border-red-500 bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-transparent'}`}>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <div className="flex items-center space-x-2"><Users className="w-5 h-5 text-gray-400 shrink-0" /><span className="font-medium whitespace-nowrap">{employee.name}</span></div>
+                                <div className="flex items-center gap-2 border-l border-white/10 pl-3">
+                                  <div className="flex items-center space-x-1"><span className="text-xs text-gray-400 shrink-0">時薪</span><TrackedInput className="text-emerald-300" value={employee.hourlyWage} onChange={v => handleUpdateField(employee.id, 'hourlyWage', v)} onCommitChange={(oldV, newV) => logWebhook(`修改: 員工 ${employee.name} 時薪由 ${oldV} 改為 ${newV}`)} suffix="PHP" /></div>
+                                  <div className="flex items-center space-x-1"><span className="text-xs text-gray-400 shrink-0">抽成</span><TrackedInput className="text-purple-300" value={employee.cutPercentage} onChange={v => handleUpdateField(employee.id, 'cutPercentage', v)} onCommitChange={(oldV, newV) => logWebhook(`修改: 員工 ${employee.name} 抽成由 ${oldV}% 改為 ${newV}%`)} suffix="%" /></div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <AddHourInline onAdd={h => handleAddHours(employee.id, h)} />
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-sm text-gray-400 shrink-0">時數</span>
+                                  <TrackedInput className={`font-bold ${isOvertime ? 'text-red-400' : 'text-yellow-400'}`} value={employee.pendingHours} onChange={v => handleUpdateField(employee.id, 'pendingHours', v)} onCommitChange={(oldV, newV) => logWebhook(`修改: 員工 ${employee.name} 總時數由 ${oldV} 改為 ${newV}`)} suffix="h" />
+                                </div>
+                                <button onClick={() => openSettleModal(employee)} className="px-4 py-2 bg-blue-600/80 hover:bg-blue-500 text-white rounded-xl text-sm font-medium border border-blue-400/30 transition-all shrink-0 whitespace-nowrap">結算薪資</button>
+                                <button onClick={() => handleDeleteUser(employee)} className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl transition-all shrink-0 ml-1" title="刪除員工"><Trash2 className="w-4 h-4" /></button>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <AddHourInline onAdd={h => handleAddHours(employee.id, h)} />
-                              <div className="flex items-center space-x-2"><span className="text-sm text-gray-400 shrink-0">時數</span><TrackedInput className="text-yellow-400 font-bold" value={employee.pendingHours} onChange={v => handleUpdateField(employee.id, 'pendingHours', v)} onCommitChange={(oldV, newV) => logWebhook(`修改: 員工 ${employee.name} 總時數由 ${oldV} 改為 ${newV}`)} suffix="h" /></div>
-                              <button onClick={() => openSettleModal(employee)} className="px-4 py-2 bg-blue-600/80 hover:bg-blue-500 text-white rounded-xl text-sm font-medium border border-blue-400/30 transition-all shrink-0 whitespace-nowrap">結算薪資</button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
