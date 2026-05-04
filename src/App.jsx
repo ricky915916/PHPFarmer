@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  Users, UserPlus, CheckCircle2, ShieldAlert, Award, Briefcase, Plus, DollarSign, Globe, Trash2, Crown, ChevronRight
+  Users, UserPlus, CheckCircle2, ShieldAlert, Award, Briefcase, Plus, DollarSign, Globe, Trash2, Crown, Link
 } from 'lucide-react';
 // 引入 Firebase
 import { initializeApp } from 'firebase/app';
@@ -98,9 +98,12 @@ export default function App() {
   const [exchangeRates, setExchangeRates] = useState({ usd: null, cny: null });
   const [loading, setLoading] = useState(true);
   
-  // 更新 newUser 狀態：將 cutHours 變更為 cutPerHour (預設抽 5 塊)
-  const [newUser, setNewUser] = useState({ name: '', role: 'employee', managerId: '', buyerId: '', cutPerHour: 5, hourlyWage: 70 });
+  const [newUser, setNewUser] = useState({ name: '', role: 'employee', managerId: '', cutPerHour: 5, hourlyWage: 70 });
   const [newBuyer, setNewBuyer] = useState({ name: '', cnyAmount: 0, balance: 0 });
+  
+  // 買家綁定表單狀態
+  const [bindForm, setBindForm] = useState({ buyerId: '', userId: '' });
+  
   const [modal, setModal] = useState({ isOpen: false, user: null });
 
   useEffect(() => {
@@ -134,6 +137,34 @@ export default function App() {
 
   const managers = useMemo(() => users.filter(u => u.role === 'manager'), [users]);
 
+  // --- 薪資分頁：新增人員 ---
+  const handleAddUser = async (e) => {
+    e.preventDefault();
+    if (!newUser.name) return alert('請輸入名稱');
+    
+    const id = Math.random().toString(36).substr(2, 9);
+    const userObj = { name: newUser.name, role: newUser.role, pendingHours: 0, hourlyWage: Number(newUser.hourlyWage) || 0, buyerId: '' };
+
+    if (newUser.role === 'employee') {
+      if (!newUser.managerId) return alert('請選擇所屬經理');
+      userObj.managerId = newUser.managerId;
+      userObj.cutPerHour = Number(newUser.cutPerHour) || 0; 
+      const manager = users.find(u => u.id === newUser.managerId);
+      logWebhook(`新增員工: ${newUser.name} (所屬經理: ${manager?.name}, 每小抽成: ${newUser.cutPerHour} PHP)`);
+      actionWebhook(`👥 **新增員工**\n> 名字：${newUser.name}\n> 所屬經理：${manager?.name}\n> 每小時抽成：${newUser.cutPerHour} PHP/h`);
+    } else {
+      userObj.bonusPhp = 0;
+      logWebhook(`新增經理: ${newUser.name}`);
+      actionWebhook(`👤 **新增經理**\n> 名字：${newUser.name}`);
+    }
+
+    try {
+      await setDoc(doc(db, 'users', id), userObj);
+      setNewUser({ name: '', role: 'employee', managerId: '', cutPerHour: 5, hourlyWage: 70 });
+    } catch (error) { alert("新增失敗"); }
+  };
+
+  // --- 買家分頁：新增買家 ---
   const handleAddBuyer = async (e) => {
     e.preventDefault();
     if (!newBuyer.name) return alert('請輸入買家名稱');
@@ -149,41 +180,42 @@ export default function App() {
     } catch (err) { console.error(err); alert("新增買家失敗"); }
   };
 
-  const handleAddUser = async (e) => {
+  // --- 買家分頁：綁定人員 ---
+  const handleBindUser = async (e) => {
     e.preventDefault();
-    if (!newUser.name) return alert('請輸入名稱');
+    if (!bindForm.buyerId || !bindForm.userId) return alert('請選擇買家與要綁定的人員');
     
-    const id = Math.random().toString(36).substr(2, 9);
-    const userObj = { name: newUser.name, role: newUser.role, pendingHours: 0, hourlyWage: Number(newUser.hourlyWage) || 0 };
-
-    if (newUser.role === 'employee') {
-      if (!newUser.managerId) return alert('請選擇所屬經理');
-      userObj.managerId = newUser.managerId;
-      userObj.cutPerHour = Number(newUser.cutPerHour) || 0; 
-      const manager = users.find(u => u.id === newUser.managerId);
-      logWebhook(`新增員工: ${newUser.name} (所屬經理: ${manager?.name}, 每小抽成: ${newUser.cutPerHour} PHP)`);
-      actionWebhook(`👥 **新增員工**\n> 名字：${newUser.name}\n> 所屬經理：${manager?.name}\n> 每小時抽成：${newUser.cutPerHour} PHP/h`);
-    } else {
-      if (activeTab === 'buyer' && !newUser.buyerId) return alert('請選擇所屬買家');
-      userObj.buyerId = newUser.buyerId || '';
-      userObj.bonusPhp = 0;
-      logWebhook(`新增經理: ${newUser.name}`);
-      actionWebhook(`👤 **新增經理**\n> 名字：${newUser.name}`);
-    }
-
     try {
-      await setDoc(doc(db, 'users', id), userObj);
-      setNewUser({ name: '', role: 'employee', managerId: '', buyerId: '', cutPerHour: 5, hourlyWage: 70 });
-    } catch (error) { alert("新增失敗"); }
+      await updateDoc(doc(db, 'users', bindForm.userId), { buyerId: bindForm.buyerId });
+      const buyer = buyers.find(b => b.id === bindForm.buyerId);
+      const user = users.find(u => u.id === bindForm.userId);
+      logWebhook(`綁定人員: 將「${user.name}」綁定至買家「${buyer.name}」`);
+      setBindForm({ buyerId: '', userId: '' });
+    } catch (error) {
+      console.error(error);
+      alert("綁定失敗");
+    }
   };
 
+  // --- 買家分頁：解除綁定人員 ---
+  const handleUnbindUser = async (user) => {
+    if (!window.confirm(`確定要將「${user.name}」從該買家移除嗎？\n(注意：人員資料不會被刪除，僅解除與買家的綁定關係)`)) return;
+    try {
+      await updateDoc(doc(db, 'users', user.id), { buyerId: '' });
+      logWebhook(`解除綁定: 將「${user.name}」從買家移除`);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  // --- 刪除與更新功能 ---
   const handleDeleteDoc = async (collectionName, item) => {
     if (collectionName === 'buyers') {
-      const hasManagers = users.some(u => u.buyerId === item.id);
-      if (hasManagers) return alert('無法刪除！此買家底下還有綁定的經理，請先刪除該經理。');
+      const hasUsers = users.some(u => u.buyerId === item.id);
+      if (hasUsers) return alert('無法刪除！此買家底下還有綁定的人員，請先將他們解除綁定。');
     } else if (item.role === 'manager') {
       const hasEmployees = users.some(u => u.managerId === item.id);
-      if (hasEmployees) return alert('無法刪除！此經理底下還有綁定的員工，請先刪除員工。');
+      if (hasEmployees) return alert('無法刪除！此經理底下還有綁定的員工，請先刪除或轉移員工。');
     }
 
     if (!window.confirm(`確定要刪除「${item.name}」嗎？\n資料刪除後無法復原！`)) return;
@@ -217,11 +249,9 @@ export default function App() {
         logWebhook(`結算經理: ${user.name} (總發放: ${totalPhp} PHP)`);
       } else {
         const grossHours = user.pendingHours;
-        const cutAmountPerHour = user.cutPerHour ?? user.cutHours ?? 0; // 支援舊資料
+        const cutAmountPerHour = user.cutPerHour ?? user.cutHours ?? 0; 
         
-        // 經理分紅 = 總時數 * 每小時抽成
         const managerBonusPhp = grossHours * cutAmountPerHour;
-        // 員工實得 = 總時數 * (時薪 - 每小時抽成)
         const employeePayoutPhp = grossHours * (user.hourlyWage - cutAmountPerHour);
         
         const manager = users.find(u => u.id === user.managerId);
@@ -243,7 +273,7 @@ export default function App() {
         input[type="number"] { -moz-appearance: textfield; }
       `}</style>
 
-      {/* 結算確認彈窗 Modal (已更新為最新 每小時抽成金額 計算邏輯) */}
+      {/* 結算確認彈窗 Modal */}
       {modal.isOpen && (() => {
         const user = modal.user;
         const grossHours = user?.pendingHours || 0;
@@ -257,42 +287,34 @@ export default function App() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md transition-all">
             <div className="bg-[#1c1c1e]/95 border border-white/10 rounded-[32px] p-8 max-w-md w-full shadow-2xl">
               <h3 className="text-2xl font-bold mb-6 text-white border-b border-white/10 pb-4">結算明細確認</h3>
-              
               <div className="mb-8 space-y-4 text-lg">
                 <p className="text-gray-400">對象：<strong className="text-blue-400 text-xl">{user?.name}</strong></p>
-                
                 {user?.role === 'employee' && (
                   <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-3 font-mono text-base">
                     <div className="flex justify-between"><span className="text-gray-400">總時數</span><span className="text-white">{grossHours.toFixed(1)} h</span></div>
                     <div className="flex justify-between"><span className="text-gray-400">約定時薪</span><span className="text-white">{wage} PHP/h</span></div>
                     <div className="border-t border-white/10 pt-2 flex justify-between font-bold text-gray-300">
-                      <span>打單總金額</span>
-                      <span>{(grossHours * wage).toFixed(0)} PHP</span>
+                      <span>打單總金額</span><span>{(grossHours * wage).toFixed(0)} PHP</span>
                     </div>
                     <div className="flex justify-between text-purple-400">
-                      <span>經理抽成 ({cut} PHP/h)</span>
-                      <span>- {managerBonusPhp.toFixed(0)} PHP</span>
+                      <span>經理抽成 ({cut} PHP/h)</span><span>- {managerBonusPhp.toFixed(0)} PHP</span>
                     </div>
                     <div className="border-t border-blue-500/30 pt-3 flex justify-between font-bold text-xl text-green-400 mt-2">
-                      <span>員工發放金額</span>
-                      <span>{employeePayoutPhp.toFixed(0)} PHP</span>
+                      <span>員工發放金額</span><span>{employeePayoutPhp.toFixed(0)} PHP</span>
                     </div>
                   </div>
                 )}
-
                 {user?.role === 'manager' && (
                   <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-3 font-mono text-base">
                     <div className="flex justify-between"><span className="text-gray-400">代打時數 ({grossHours.toFixed(1)}h)</span><span className="text-white">× {wage} PHP</span></div>
                     <div className="flex justify-between text-blue-300"><span>自身代打薪資</span><span>= {(grossHours * wage).toFixed(0)} PHP</span></div>
                     <div className="flex justify-between text-purple-400"><span>累積員工分紅</span><span>+ {(user.bonusPhp || 0).toFixed(0)} PHP</span></div>
                     <div className="border-t border-blue-500/30 pt-3 flex justify-between font-bold text-xl text-green-400 mt-2">
-                      <span>經理發放總額</span>
-                      <span>{((grossHours * wage) + (user.bonusPhp || 0)).toFixed(0)} PHP</span>
+                      <span>經理發放總額</span><span>{((grossHours * wage) + (user.bonusPhp || 0)).toFixed(0)} PHP</span>
                     </div>
                   </div>
                 )}
               </div>
-
               <div className="flex space-x-3">
                 <button onClick={() => setModal({ isOpen: false, user: null })} className="flex-1 py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all">取消</button>
                 <button onClick={confirmSettle} disabled={user?.pendingHours === 0 && user?.bonusPhp === 0} className="flex-1 py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed">確認結算歸零</button>
@@ -316,14 +338,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* 背景光暈 */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-600/10 rounded-full blur-[150px] mix-blend-screen"></div>
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] bg-blue-600/10 rounded-full blur-[150px] mix-blend-screen"></div>
-      </div>
-
       <div className="relative z-10 max-w-7xl mx-auto p-6 md:p-10 pt-6">
-        
         {/* 標題與分頁切換 */}
         <header className="mb-8">
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-br from-white to-gray-400 bg-clip-text text-transparent mb-6">
@@ -346,7 +361,7 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-3 space-y-6">
               <GlassCard className="p-6">
-                <div className="flex items-center space-x-3 mb-6"><div className="p-2 bg-blue-500/20 rounded-xl"><UserPlus className="w-5 h-5 text-blue-400" /></div><h2 className="text-lg font-bold">新增人員</h2></div>
+                <div className="flex items-center space-x-3 mb-6"><div className="p-2 bg-blue-500/20 rounded-xl"><UserPlus className="w-5 h-5 text-blue-400" /></div><h2 className="text-lg font-bold">新增代練人員</h2></div>
                 <form onSubmit={handleAddUser} className="space-y-4">
                   <div className="flex bg-black/40 p-1 rounded-xl border border-white/10">
                     <button type="button" className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${newUser.role === 'employee' ? 'bg-white/10 shadow-sm' : 'text-gray-400 hover:text-white'}`} onClick={() => setNewUser({...newUser, role: 'employee'})}>員工</button>
@@ -430,32 +445,26 @@ export default function App() {
                 </form>
               </GlassCard>
 
-              {/* 團隊人員管理表單 (支援經理與員工) */}
+              {/* 綁定現有代練人員表單 */}
               <GlassCard className="p-6">
-                <div className="flex items-center space-x-3 mb-6"><div className="p-2 bg-purple-500/20 rounded-xl"><UserPlus className="w-5 h-5 text-purple-400" /></div><h2 className="text-lg font-bold">新增團隊人員</h2></div>
-                <form onSubmit={handleAddUser} className="space-y-4">
-                  <div className="flex bg-black/40 p-1 rounded-xl border border-white/10">
-                    <button type="button" className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${newUser.role === 'employee' ? 'bg-white/10 shadow-sm' : 'text-gray-400 hover:text-white'}`} onClick={() => setNewUser({...newUser, role: 'employee'})}>員工</button>
-                    <button type="button" className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${newUser.role === 'manager' ? 'bg-white/10 shadow-sm' : 'text-gray-400 hover:text-white'}`} onClick={() => setNewUser({...newUser, role: 'manager'})}>經理</button>
-                  </div>
+                <div className="flex items-center space-x-3 mb-6"><div className="p-2 bg-purple-500/20 rounded-xl"><Link className="w-5 h-5 text-purple-400" /></div><h2 className="text-lg font-bold">綁定代練人員</h2></div>
+                <form onSubmit={handleBindUser} className="space-y-4">
                   
-                  <input type="text" placeholder="人員名稱" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
-                  
-                  {newUser.role === 'manager' && (
-                    <select className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 appearance-none" value={newUser.buyerId} onChange={e => setNewUser({...newUser, buyerId: e.target.value})}>
-                      <option value="">選擇綁定的買家...</option>
-                      {buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </select>
-                  )}
+                  <select className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 appearance-none" value={bindForm.buyerId} onChange={e => setBindForm({...bindForm, buyerId: e.target.value})}>
+                    <option value="">選擇要管理的買家...</option>
+                    {buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
 
-                  {newUser.role === 'employee' && (
-                    <select className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 appearance-none" value={newUser.managerId} onChange={e => setNewUser({...newUser, managerId: e.target.value})}>
-                      <option value="">選擇所屬經理...</option>
-                      {managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>
-                  )}
+                  <select className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 appearance-none" value={bindForm.userId} onChange={e => setBindForm({...bindForm, userId: e.target.value})}>
+                    <option value="">選擇現有代練人員...</option>
+                    {users.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.role === 'manager' ? '經理' : '員工'}) {u.buyerId ? '🔗' : ''}
+                      </option>
+                    ))}
+                  </select>
                   
-                  <button type="submit" className="w-full py-3 px-4 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl font-semibold transition-all">新增</button>
+                  <button type="submit" className="w-full py-3 px-4 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl font-semibold transition-all">確認綁定</button>
                 </form>
               </GlassCard>
             </div>
@@ -463,7 +472,9 @@ export default function App() {
             {/* 買家列表呈現 */}
             <div className="lg:col-span-9 space-y-6">
               {buyers.map(buyer => {
-                const buyerManagers = users.filter(u => u.role === 'manager' && u.buyerId === buyer.id);
+                // 從資源池中抓出所有綁定到該買家的人員 (不管是經理還是員工)
+                const boundUsers = users.filter(u => u.buyerId === buyer.id);
+                
                 return (
                   <div key={buyer.id} className="bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden shadow-xl">
                     <div className="p-4 sm:p-5 flex items-center justify-between bg-gradient-to-r from-rose-900/30 to-transparent border-b border-rose-500/20 gap-4 overflow-x-auto">
@@ -478,38 +489,25 @@ export default function App() {
                       </div>
                     </div>
                     
-                    <div className="p-4 space-y-3">
-                      {buyerManagers.length === 0 ? <div className="text-gray-500 text-sm italic ml-2">尚未綁定任何經理</div> : 
-                        buyerManagers.map(manager => {
-                          const teamEmployees = users.filter(u => u.role === 'employee' && u.managerId === manager.id);
-                          return (
-                            <div key={manager.id} className="bg-black/20 rounded-2xl border border-white/5 p-3">
-                              <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
-                                <div className="flex items-center gap-2">
-                                  <Briefcase className="w-4 h-4 text-purple-400" /><span className="font-bold text-purple-100">{manager.name}</span>
+                    {/* 綁定人員列表 (扁平化顯示) */}
+                    <div className="p-4">
+                      {boundUsers.length === 0 ? <div className="text-gray-500 text-sm italic ml-2">尚未綁定任何代練人員</div> : 
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                          {boundUsers.map(user => (
+                            <div key={user.id} className="bg-black/20 rounded-xl border border-white/5 p-3 flex items-center justify-between group hover:bg-white/5 transition-colors">
+                              <div className="flex items-center gap-3">
+                                {user.role === 'manager' ? <Briefcase className="w-4 h-4 text-purple-400" /> : <Users className="w-4 h-4 text-gray-400" />}
+                                <div>
+                                  <div className="font-medium text-gray-200 leading-tight">{user.name}</div>
+                                  <div className="text-[10px] text-gray-500">{user.role === 'manager' ? '系統經理' : '系統員工'}</div>
                                 </div>
-                                <button onClick={() => handleDeleteDoc('users', manager)} className="p-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-md transition-all shrink-0">
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
                               </div>
-                              
-                              <div className="pl-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                                {teamEmployees.length === 0 ? <span className="text-xs text-gray-500 ml-4">無員工</span> : 
-                                  teamEmployees.map(emp => (
-                                    <div key={emp.id} className="flex items-center justify-between text-sm text-gray-400 bg-white/5 px-3 py-1.5 rounded-lg w-full">
-                                      <div className="flex items-center truncate pr-2">
-                                        <ChevronRight className="w-3 h-3 mr-1 opacity-50 shrink-0" /> <span className="truncate">{emp.name}</span>
-                                      </div>
-                                      <button onClick={() => handleDeleteDoc('users', emp)} className="text-gray-500 hover:text-red-400 transition-colors shrink-0 p-1">
-                                        <Trash2 className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  ))
-                                }
-                              </div>
+                              <button onClick={() => handleUnbindUser(user)} className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg transition-all opacity-0 group-hover:opacity-100" title="解除綁定">
+                                <Link className="w-4 h-4 line-through" />
+                              </button>
                             </div>
-                          )
-                        })
+                          ))}
+                        </div>
                       }
                     </div>
                   </div>
