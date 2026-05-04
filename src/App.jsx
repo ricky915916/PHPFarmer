@@ -11,7 +11,7 @@ const LOG_WEBHOOK = "https://discord.com/api/webhooks/1499763356540604550/mjn_Md
 const ACTION_WEBHOOK = "https://discord.com/api/webhooks/1499763359783059626/ZHT9MIQHuhX1pjjC_HUOwxmNxFintLYfeQf3ydfjYYtePh27vxXzRJstuG0dVoceO_f-";
 
 // ============================================================================
-// 👉 請將你從 Firebase 複製的設定貼在這裡：
+// 👉 Firebase 專案設定 (已更新為 Wolf 的真實金鑰)
 // ============================================================================
 const firebaseConfig = {
   apiKey: "AIzaSyC3OyRHBo7iz2uU0udL60ru99CQZCk1b0A",
@@ -21,7 +21,6 @@ const firebaseConfig = {
   messagingSenderId: "933405127775",
   appId: "1:933405127775:web:921af7a7f513cd72c817ea"
 };
-
 
 // 初始化 Firebase
 const app = initializeApp(firebaseConfig);
@@ -165,13 +164,14 @@ export default function App() {
     if (newUser.role === 'employee') {
       if (!newUser.managerId) return alert('請選擇所屬經理');
       userObj.managerId = newUser.managerId;
-      userObj.cutHours = Number(newUser.cutHours) || 0; // 改為固定時數
+      userObj.cutHours = Number(newUser.cutHours) || 0; // 固定時數
       const manager = users.find(u => u.id === newUser.managerId);
       logWebhook(`新增員工: ${newUser.name} (所屬經理: ${manager?.name}, 固定抽成: ${newUser.cutHours} h)`);
       actionWebhook(`👥 **新增員工**\n> 名字：${newUser.name}\n> 所屬經理：${manager?.name}\n> 固定抽成：${newUser.cutHours} h`);
     } else {
+      // 只有在買家分頁新增經理時才強制檢查 buyerId
       if (activeTab === 'buyer' && !newUser.buyerId) return alert('請選擇所屬買家');
-      if (activeTab === 'buyer') userObj.buyerId = newUser.buyerId;
+      userObj.buyerId = newUser.buyerId || '';
       userObj.bonusPhp = 0;
       logWebhook(`新增經理: ${newUser.name}`);
       actionWebhook(`👤 **新增經理**\n> 名字：${newUser.name}`);
@@ -187,13 +187,13 @@ export default function App() {
   const handleDeleteDoc = async (collectionName, item) => {
     if (collectionName === 'buyers') {
       const hasManagers = users.some(u => u.buyerId === item.id);
-      if (hasManagers) return alert('無法刪除！此買家底下還有綁定的經理。');
+      if (hasManagers) return alert('無法刪除！此買家底下還有綁定的經理，請先刪除該經理。');
     } else if (item.role === 'manager') {
       const hasEmployees = users.some(u => u.managerId === item.id);
-      if (hasEmployees) return alert('無法刪除！此經理底下還有綁定的員工。');
+      if (hasEmployees) return alert('無法刪除！此經理底下還有綁定的員工，請先刪除員工。');
     }
 
-    if (!window.confirm(`確定要刪除「${item.name}」嗎？`)) return;
+    if (!window.confirm(`確定要刪除「${item.name}」嗎？\n資料刪除後無法復原！`)) return;
 
     try {
       await deleteDoc(doc(db, collectionName, item.id));
@@ -375,16 +375,32 @@ export default function App() {
                 </form>
               </GlassCard>
 
-              {/* 綁定經理表單 */}
+              {/* 團隊人員管理表單 (支援經理與員工) */}
               <GlassCard className="p-6">
-                <div className="flex items-center space-x-3 mb-6"><div className="p-2 bg-purple-500/20 rounded-xl"><Briefcase className="w-5 h-5 text-purple-400" /></div><h2 className="text-lg font-bold">經理綁定買家</h2></div>
+                <div className="flex items-center space-x-3 mb-6"><div className="p-2 bg-purple-500/20 rounded-xl"><UserPlus className="w-5 h-5 text-purple-400" /></div><h2 className="text-lg font-bold">新增團隊人員</h2></div>
                 <form onSubmit={handleAddUser} className="space-y-4">
-                  <input type="text" placeholder="經理名稱" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value, role: 'manager'})} />
-                  <select className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 appearance-none" value={newUser.buyerId} onChange={e => setNewUser({...newUser, buyerId: e.target.value, role: 'manager'})}>
-                    <option value="">選擇所屬買家...</option>
-                    {buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
-                  <button type="submit" className="w-full py-3 px-4 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl font-semibold transition-all">新增經理</button>
+                  <div className="flex bg-black/40 p-1 rounded-xl border border-white/10">
+                    <button type="button" className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${newUser.role === 'employee' ? 'bg-white/10 shadow-sm' : 'text-gray-400 hover:text-white'}`} onClick={() => setNewUser({...newUser, role: 'employee'})}>員工</button>
+                    <button type="button" className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${newUser.role === 'manager' ? 'bg-white/10 shadow-sm' : 'text-gray-400 hover:text-white'}`} onClick={() => setNewUser({...newUser, role: 'manager'})}>經理</button>
+                  </div>
+                  
+                  <input type="text" placeholder="人員名稱" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
+                  
+                  {newUser.role === 'manager' && (
+                    <select className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 appearance-none" value={newUser.buyerId} onChange={e => setNewUser({...newUser, buyerId: e.target.value})}>
+                      <option value="">選擇綁定的買家...</option>
+                      {buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  )}
+
+                  {newUser.role === 'employee' && (
+                    <select className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 appearance-none" value={newUser.managerId} onChange={e => setNewUser({...newUser, managerId: e.target.value})}>
+                      <option value="">選擇所屬經理...</option>
+                      {managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  )}
+                  
+                  <button type="submit" className="w-full py-3 px-4 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl font-semibold transition-all">新增</button>
                 </form>
               </GlassCard>
             </div>
@@ -413,14 +429,25 @@ export default function App() {
                           const teamEmployees = users.filter(u => u.role === 'employee' && u.managerId === manager.id);
                           return (
                             <div key={manager.id} className="bg-black/20 rounded-2xl border border-white/5 p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Briefcase className="w-4 h-4 text-purple-400" /><span className="font-bold text-purple-100">{manager.name}</span>
+                              <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
+                                <div className="flex items-center gap-2">
+                                  <Briefcase className="w-4 h-4 text-purple-400" /><span className="font-bold text-purple-100">{manager.name}</span>
+                                </div>
+                                <button onClick={() => handleDeleteDoc('users', manager)} className="p-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-md transition-all shrink-0">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </div>
-                              <div className="pl-6 grid grid-cols-2 md:grid-cols-3 gap-2">
-                                {teamEmployees.length === 0 ? <span className="text-xs text-gray-500">無員工</span> : 
+                              
+                              <div className="pl-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                {teamEmployees.length === 0 ? <span className="text-xs text-gray-500 ml-4">無員工</span> : 
                                   teamEmployees.map(emp => (
-                                    <div key={emp.id} className="flex items-center text-sm text-gray-400 bg-white/5 px-3 py-1.5 rounded-lg w-fit">
-                                      <ChevronRight className="w-3 h-3 mr-1 opacity-50" /> {emp.name}
+                                    <div key={emp.id} className="flex items-center justify-between text-sm text-gray-400 bg-white/5 px-3 py-1.5 rounded-lg w-full">
+                                      <div className="flex items-center truncate pr-2">
+                                        <ChevronRight className="w-3 h-3 mr-1 opacity-50 shrink-0" /> <span className="truncate">{emp.name}</span>
+                                      </div>
+                                      <button onClick={() => handleDeleteDoc('users', emp)} className="text-gray-500 hover:text-red-400 transition-colors shrink-0 p-1">
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
                                     </div>
                                   ))
                                 }
