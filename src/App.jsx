@@ -36,9 +36,9 @@ const actionWebhook = (msg) => {
   fetch(ACTION_WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: msg }) }).catch(console.error);
 };
 
-// --- 共用 UI 元件 ---
+// --- 共用 UI 元件 (強化毛玻璃效果) ---
 const GlassCard = ({ children, className = '' }) => (
-  <div className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl ${className}`}>{children}</div>
+  <div className={`bg-white/10 backdrop-blur-2xl border border-white/20 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] ${className}`}>{children}</div>
 );
 
 const TrackedInput = ({ value, onChange, onCommitChange, className, suffix = "", min = 0, step = 1 }) => {
@@ -51,7 +51,7 @@ const TrackedInput = ({ value, onChange, onCommitChange, className, suffix = "",
   const inputWidth = `${Math.max(localVal.toString().length, 1) + 2.5}ch`;
 
   return (
-    <div className={`flex items-center bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all shrink-0 ${className}`}>
+    <div className={`flex items-center bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-500/70 transition-all shrink-0 shadow-inner ${className}`}>
       <input
         type="number" min={min} step={step} value={localVal}
         onChange={e => { setLocalVal(e.target.value); const num = parseFloat(e.target.value); if (!isNaN(num)) onChange(num); }}
@@ -66,7 +66,7 @@ const TrackedInput = ({ value, onChange, onCommitChange, className, suffix = "",
         style={{ width: inputWidth }}
         className="bg-transparent text-white focus:outline-none text-right font-mono"
       />
-      {suffix && <span className="text-gray-500 ml-1 text-sm font-medium whitespace-nowrap">{suffix}</span>}
+      {suffix && <span className="text-gray-400 ml-1 text-sm font-medium whitespace-nowrap">{suffix}</span>}
     </div>
   );
 };
@@ -78,12 +78,12 @@ const AddHourInline = ({ onAdd }) => {
     if (!isNaN(num) && num !== 0) { onAdd(num); setVal(''); }
   };
   return (
-    <div className="flex items-center space-x-1 bg-blue-500/10 rounded-xl px-2 py-1.5 border border-blue-500/20 focus-within:bg-blue-500/20 transition-all shrink-0">
-      <Plus className="w-4 h-4 text-blue-400 shrink-0" />
+    <div className="flex items-center space-x-1 bg-blue-500/20 rounded-xl px-2 py-1.5 border border-blue-400/30 focus-within:bg-blue-500/30 transition-all shrink-0">
+      <Plus className="w-4 h-4 text-blue-300 shrink-0" />
       <input
         type="number" placeholder="加時數" value={val}
         onChange={e => setVal(e.target.value)} onBlur={handleCommit} onKeyDown={e => e.key === 'Enter' && handleCommit()}
-        className="w-[70px] bg-transparent text-blue-100 text-sm focus:outline-none placeholder-blue-400/50 font-mono"
+        className="w-[70px] bg-transparent text-blue-50 text-sm focus:outline-none placeholder-blue-300/60 font-mono"
       />
     </div>
   );
@@ -324,34 +324,41 @@ export default function App() {
         );
       })()}
 
-      {/* 頂端匯率列 */}
-      <div className="bg-white/5 border-b border-white/10 backdrop-blur-md px-6 py-2 flex flex-wrap justify-center items-center gap-6 relative z-20 text-sm">
+      {/* 頂端匯率列 (強化毛玻璃與陰影) */}
+      <div className="bg-white/10 border-b border-white/20 backdrop-blur-2xl px-6 py-3 flex flex-wrap justify-center items-center gap-6 relative z-20 text-sm shadow-md">
         <div className="flex items-center space-x-2">
           <Globe className="w-4 h-4 text-emerald-400" />
-          <span className="text-gray-400">USD / PHP：</span>
+          <span className="text-gray-300">USD / PHP：</span>
           <span className="font-mono font-bold text-emerald-400">{exchangeRates.usd ? `1 = ${exchangeRates.usd.toFixed(2)}` : '載入中...'}</span>
         </div>
         <div className="flex items-center space-x-2">
           <Globe className="w-4 h-4 text-rose-400" />
-          <span className="text-gray-400">CNY / PHP：</span>
+          <span className="text-gray-300">CNY / PHP：</span>
           <span className="font-mono font-bold text-rose-400">{exchangeRates.cny ? `1 = ${exchangeRates.cny.toFixed(2)}` : '載入中...'}</span>
         </div>
+      </div>
+
+      {/* 背景環境光暈 (增強亮度與範圍，提升毛玻璃折射對比) */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-500/30 rounded-full blur-[120px] mix-blend-screen"></div>
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] bg-blue-500/30 rounded-full blur-[120px] mix-blend-screen"></div>
+        <div className="absolute top-[30%] left-[60%] w-[40vw] h-[40vw] bg-purple-500/25 rounded-full blur-[150px] mix-blend-screen"></div>
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto p-6 md:p-10 pt-6">
         {/* 標題與分頁切換 */}
         <header className="mb-8">
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-br from-white to-gray-400 bg-clip-text text-transparent mb-6">
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-br from-white to-gray-400 bg-clip-text text-transparent mb-6 drop-shadow-sm">
             代練管理中樞
           </h1>
-          <div className="flex space-x-2 bg-white/5 p-1.5 rounded-2xl border border-white/10 w-fit backdrop-blur-md">
+          <div className="flex space-x-2 bg-white/10 p-1.5 rounded-2xl border border-white/20 w-fit backdrop-blur-xl shadow-lg">
             <button 
               onClick={() => setActiveTab('salary')}
-              className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'salary' ? 'bg-blue-600 shadow-lg text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'salary' ? 'bg-blue-600 shadow-md text-white' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
             >代練薪資結算</button>
             <button 
               onClick={() => setActiveTab('buyer')}
-              className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'buyer' ? 'bg-rose-600 shadow-lg text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'buyer' ? 'bg-rose-600 shadow-md text-white' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
             >買家帳戶資訊</button>
           </div>
         </header>
@@ -361,25 +368,25 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-3 space-y-6">
               <GlassCard className="p-6">
-                <div className="flex items-center space-x-3 mb-6"><div className="p-2 bg-blue-500/20 rounded-xl"><UserPlus className="w-5 h-5 text-blue-400" /></div><h2 className="text-lg font-bold">新增代練人員</h2></div>
+                <div className="flex items-center space-x-3 mb-6"><div className="p-2 bg-blue-500/30 rounded-xl border border-blue-400/20"><UserPlus className="w-5 h-5 text-blue-300" /></div><h2 className="text-lg font-bold text-white">新增代練人員</h2></div>
                 <form onSubmit={handleAddUser} className="space-y-4">
-                  <div className="flex bg-black/40 p-1 rounded-xl border border-white/10">
-                    <button type="button" className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${newUser.role === 'employee' ? 'bg-white/10 shadow-sm' : 'text-gray-400 hover:text-white'}`} onClick={() => setNewUser({...newUser, role: 'employee'})}>員工</button>
-                    <button type="button" className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${newUser.role === 'manager' ? 'bg-white/10 shadow-sm' : 'text-gray-400 hover:text-white'}`} onClick={() => setNewUser({...newUser, role: 'manager'})}>經理</button>
+                  <div className="flex bg-black/50 p-1 rounded-xl border border-white/10 shadow-inner">
+                    <button type="button" className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${newUser.role === 'employee' ? 'bg-white/20 shadow-sm text-white' : 'text-gray-400 hover:text-white'}`} onClick={() => setNewUser({...newUser, role: 'employee'})}>員工</button>
+                    <button type="button" className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${newUser.role === 'manager' ? 'bg-white/20 shadow-sm text-white' : 'text-gray-400 hover:text-white'}`} onClick={() => setNewUser({...newUser, role: 'manager'})}>經理</button>
                   </div>
-                  <input type="text" placeholder="人員名稱" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
-                  <div><label className="block text-xs text-gray-400 mb-1 ml-1">約定時薪 (PHP)</label><input type="number" min="0" placeholder="70" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50" value={newUser.hourlyWage} onChange={e => setNewUser({...newUser, hourlyWage: e.target.value})} /></div>
+                  <input type="text" placeholder="人員名稱" className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/70 shadow-inner transition-all" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
+                  <div><label className="block text-xs text-gray-300 mb-1 ml-1">約定時薪 (PHP)</label><input type="number" min="0" placeholder="70" className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 shadow-inner transition-all" value={newUser.hourlyWage} onChange={e => setNewUser({...newUser, hourlyWage: e.target.value})} /></div>
                   
                   {newUser.role === 'employee' && (
                     <>
-                      <select className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none" value={newUser.managerId} onChange={e => setNewUser({...newUser, managerId: e.target.value})}>
-                        <option value="">選擇所屬經理...</option>
-                        {managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      <select className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/70 appearance-none shadow-inner transition-all" value={newUser.managerId} onChange={e => setNewUser({...newUser, managerId: e.target.value})}>
+                        <option value="" className="text-gray-400">選擇所屬經理...</option>
+                        {managers.map(m => <option key={m.id} value={m.id} className="text-black">{m.name}</option>)}
                       </select>
-                      <div><label className="block text-xs text-gray-400 mb-1 ml-1">每小時抽成 (PHP)</label><input type="number" min="0" placeholder="5" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50" value={newUser.cutPerHour} onChange={e => setNewUser({...newUser, cutPerHour: e.target.value})} /></div>
+                      <div><label className="block text-xs text-gray-300 mb-1 ml-1">每小時抽成 (PHP)</label><input type="number" min="0" placeholder="5" className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/70 shadow-inner transition-all" value={newUser.cutPerHour} onChange={e => setNewUser({...newUser, cutPerHour: e.target.value})} /></div>
                     </>
                   )}
-                  <button type="submit" className="w-full py-3 px-4 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl font-semibold transition-all">新增</button>
+                  <button type="submit" className="w-full py-3 px-4 bg-white/20 hover:bg-white/30 border border-white/30 text-white rounded-xl font-bold transition-all shadow-lg active:scale-95">新增</button>
                 </form>
               </GlassCard>
             </div>
@@ -388,38 +395,38 @@ export default function App() {
               {managers.map(manager => {
                 const teamEmployees = users.filter(u => u.role === 'employee' && u.managerId === manager.id);
                 return (
-                  <div key={manager.id} className="bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden shadow-xl">
-                    <div className="p-4 sm:p-5 flex items-center justify-between bg-gradient-to-r from-blue-900/30 to-transparent border-b border-white/5 gap-4 overflow-x-auto">
+                  <div key={manager.id} className="bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 overflow-hidden shadow-2xl">
+                    <div className="p-4 sm:p-5 flex items-center justify-between bg-gradient-to-r from-blue-900/40 to-transparent border-b border-white/10 gap-4 overflow-x-auto">
                       <div className="flex items-center space-x-3 shrink-0">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-lg"><Briefcase className="w-5 h-5 text-white" /></div>
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-blue-500 flex items-center justify-center shadow-lg border border-white/20"><Briefcase className="w-5 h-5 text-white" /></div>
                         <div>
-                          <h3 className="text-lg font-bold whitespace-nowrap">{manager.name}</h3>
-                          <div className="text-xs text-gray-400 flex items-center space-x-1 mt-1 whitespace-nowrap"><DollarSign className="w-3 h-3 text-purple-400" /><span>累積紅利: <span className="text-purple-300 font-mono font-bold text-sm">{(manager.bonusPhp || 0).toFixed(0)}</span> PHP</span></div>
+                          <h3 className="text-lg font-bold whitespace-nowrap text-white">{manager.name}</h3>
+                          <div className="text-xs text-gray-300 flex items-center space-x-1 mt-1 whitespace-nowrap"><DollarSign className="w-3 h-3 text-purple-300" /><span>累積紅利: <span className="text-purple-300 font-mono font-bold text-sm">{(manager.bonusPhp || 0).toFixed(0)}</span> PHP</span></div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        <div className="flex items-center space-x-2 bg-black/20 p-1 pl-3 rounded-xl border border-white/5"><span className="text-xs text-gray-400 shrink-0">時薪</span><TrackedInput className="text-emerald-300" value={manager.hourlyWage} onChange={v => handleUpdateField('users', manager.id, 'hourlyWage', v)} suffix="PHP" /></div>
+                        <div className="flex items-center space-x-2 bg-black/40 p-1 pl-3 rounded-xl border border-white/10 shadow-inner"><span className="text-xs text-gray-300 shrink-0">時薪</span><TrackedInput className="text-emerald-300" value={manager.hourlyWage} onChange={v => handleUpdateField('users', manager.id, 'hourlyWage', v)} suffix="PHP" /></div>
                         <AddHourInline onAdd={h => handleAddHours(manager.id, h)} />
-                        <div className="flex items-center space-x-2"><span className="text-sm text-gray-400 shrink-0">時數</span><TrackedInput className="text-yellow-400 font-bold" value={manager.pendingHours} onChange={v => handleUpdateField('users', manager.id, 'pendingHours', v)} suffix="h" /></div>
-                        <button onClick={() => setModal({isOpen: true, user: manager})} className="p-2.5 bg-green-500/20 text-green-400 hover:bg-green-500/30 rounded-xl transition-all shrink-0"><CheckCircle2 className="w-5 h-5" /></button>
-                        <button onClick={() => handleDeleteDoc('users', manager)} className="p-2.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl transition-all shrink-0 ml-1"><Trash2 className="w-5 h-5" /></button>
+                        <div className="flex items-center space-x-2"><span className="text-sm text-gray-300 shrink-0">時數</span><TrackedInput className="text-yellow-400 font-bold" value={manager.pendingHours} onChange={v => handleUpdateField('users', manager.id, 'pendingHours', v)} suffix="h" /></div>
+                        <button onClick={() => setModal({isOpen: true, user: manager})} className="p-2.5 bg-green-500/30 text-green-300 hover:bg-green-500/40 border border-green-400/30 rounded-xl transition-all shrink-0 shadow-md"><CheckCircle2 className="w-5 h-5" /></button>
+                        <button onClick={() => handleDeleteDoc('users', manager)} className="p-2.5 bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-400/20 rounded-xl transition-all shrink-0 ml-1 shadow-md"><Trash2 className="w-5 h-5" /></button>
                       </div>
                     </div>
                     <div className="p-2">
                       {teamEmployees.map(employee => (
-                        <div key={employee.id} className={`flex items-center justify-between p-3 px-4 sm:px-6 rounded-2xl hover:bg-white/5 transition-colors gap-4 overflow-x-auto border ${employee.pendingHours >= 150 ? 'border-red-500 bg-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-transparent'}`}>
+                        <div key={employee.id} className={`flex items-center justify-between p-3 px-4 sm:px-6 rounded-2xl hover:bg-white/10 transition-colors gap-4 overflow-x-auto border ${employee.pendingHours >= 150 ? 'border-red-500/50 bg-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : 'border-transparent'}`}>
                           <div className="flex items-center gap-3 shrink-0">
-                            <div className="flex items-center space-x-2"><Users className="w-5 h-5 text-gray-400 shrink-0" /><span className="font-medium whitespace-nowrap">{employee.name}</span></div>
-                            <div className="flex items-center gap-2 border-l border-white/10 pl-3">
+                            <div className="flex items-center space-x-2"><Users className="w-5 h-5 text-gray-300 shrink-0" /><span className="font-medium whitespace-nowrap text-gray-100">{employee.name}</span></div>
+                            <div className="flex items-center gap-2 border-l border-white/20 pl-3">
                               <div className="flex items-center space-x-1"><span className="text-xs text-gray-400 shrink-0">時薪</span><TrackedInput className="text-emerald-300" value={employee.hourlyWage} onChange={v => handleUpdateField('users', employee.id, 'hourlyWage', v)} suffix="PHP" /></div>
                               <div className="flex items-center space-x-1"><span className="text-xs text-gray-400 shrink-0">每小抽成</span><TrackedInput className="text-purple-300" value={employee.cutPerHour ?? employee.cutHours ?? 0} onChange={v => handleUpdateField('users', employee.id, 'cutPerHour', v)} suffix="PHP" /></div>
                             </div>
                           </div>
                           <div className="flex items-center gap-3 shrink-0">
                             <AddHourInline onAdd={h => handleAddHours(employee.id, h)} />
-                            <div className="flex items-center space-x-2"><span className="text-sm text-gray-400 shrink-0">時數</span><TrackedInput className={`font-bold ${employee.pendingHours >= 150 ? 'text-red-400' : 'text-yellow-400'}`} value={employee.pendingHours} onChange={v => handleUpdateField('users', employee.id, 'pendingHours', v)} suffix="h" /></div>
-                            <button onClick={() => setModal({isOpen: true, user: employee})} className="px-4 py-2 bg-blue-600/80 hover:bg-blue-500 text-white rounded-xl text-sm font-medium border border-blue-400/30 transition-all shrink-0 whitespace-nowrap">結算</button>
-                            <button onClick={() => handleDeleteDoc('users', employee)} className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl transition-all shrink-0 ml-1"><Trash2 className="w-4 h-4" /></button>
+                            <div className="flex items-center space-x-2"><span className="text-sm text-gray-300 shrink-0">時數</span><TrackedInput className={`font-bold ${employee.pendingHours >= 150 ? 'text-red-400' : 'text-yellow-400'}`} value={employee.pendingHours} onChange={v => handleUpdateField('users', employee.id, 'pendingHours', v)} suffix="h" /></div>
+                            <button onClick={() => setModal({isOpen: true, user: employee})} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white shadow-lg shadow-blue-500/30 rounded-xl text-sm font-bold border border-blue-400/50 transition-all shrink-0 whitespace-nowrap active:scale-95">結算</button>
+                            <button onClick={() => handleDeleteDoc('users', employee)} className="p-2 bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-400/20 rounded-xl transition-all shrink-0 ml-1 shadow-sm"><Trash2 className="w-4 h-4" /></button>
                           </div>
                         </div>
                       ))}
@@ -436,73 +443,66 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-3 space-y-6">
               
-              {/* 新增買家表單 */}
               <GlassCard className="p-6">
-                <div className="flex items-center space-x-3 mb-6"><div className="p-2 bg-rose-500/20 rounded-xl"><Crown className="w-5 h-5 text-rose-400" /></div><h2 className="text-lg font-bold">新增買家</h2></div>
+                <div className="flex items-center space-x-3 mb-6"><div className="p-2 bg-rose-500/30 rounded-xl border border-rose-400/20"><Crown className="w-5 h-5 text-rose-300" /></div><h2 className="text-lg font-bold text-white">新增買家</h2></div>
                 <form onSubmit={handleAddBuyer} className="space-y-4">
-                  <input type="text" placeholder="買家名稱" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50" value={newBuyer.name} onChange={e => setNewBuyer({...newBuyer, name: e.target.value})} />
-                  <button type="submit" className="w-full py-3 px-4 bg-rose-600/80 hover:bg-rose-500 border border-rose-400/30 text-white rounded-xl font-semibold transition-all">建立買家帳戶</button>
+                  <input type="text" placeholder="買家名稱" className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-rose-500/70 shadow-inner transition-all" value={newBuyer.name} onChange={e => setNewBuyer({...newBuyer, name: e.target.value})} />
+                  <button type="submit" className="w-full py-3 px-4 bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30 border border-rose-500/50 text-white rounded-xl font-bold transition-all active:scale-95">建立買家帳戶</button>
                 </form>
               </GlassCard>
 
-              {/* 綁定現有代練人員表單 */}
               <GlassCard className="p-6">
-                <div className="flex items-center space-x-3 mb-6"><div className="p-2 bg-purple-500/20 rounded-xl"><Link className="w-5 h-5 text-purple-400" /></div><h2 className="text-lg font-bold">綁定代練人員</h2></div>
+                <div className="flex items-center space-x-3 mb-6"><div className="p-2 bg-purple-500/30 rounded-xl border border-purple-400/20"><Link className="w-5 h-5 text-purple-300" /></div><h2 className="text-lg font-bold text-white">綁定代練人員</h2></div>
                 <form onSubmit={handleBindUser} className="space-y-4">
-                  
-                  <select className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 appearance-none" value={bindForm.buyerId} onChange={e => setBindForm({...bindForm, buyerId: e.target.value})}>
-                    <option value="">選擇要管理的買家...</option>
-                    {buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  <select className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/70 appearance-none shadow-inner transition-all" value={bindForm.buyerId} onChange={e => setBindForm({...bindForm, buyerId: e.target.value})}>
+                    <option value="" className="text-gray-400">選擇要管理的買家...</option>
+                    {buyers.map(b => <option key={b.id} value={b.id} className="text-black">{b.name}</option>)}
                   </select>
-
-                  <select className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 appearance-none" value={bindForm.userId} onChange={e => setBindForm({...bindForm, userId: e.target.value})}>
-                    <option value="">選擇現有代練人員...</option>
+                  <select className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/70 appearance-none shadow-inner transition-all" value={bindForm.userId} onChange={e => setBindForm({...bindForm, userId: e.target.value})}>
+                    <option value="" className="text-gray-400">選擇現有代練人員...</option>
                     {users.map(u => (
-                      <option key={u.id} value={u.id}>
+                      <option key={u.id} value={u.id} className="text-black">
                         {u.name} ({u.role === 'manager' ? '經理' : '員工'}) {u.buyerId ? '🔗' : ''}
                       </option>
                     ))}
                   </select>
-                  
-                  <button type="submit" className="w-full py-3 px-4 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl font-semibold transition-all">確認綁定</button>
+                  <button type="submit" className="w-full py-3 px-4 bg-white/20 hover:bg-white/30 border border-white/30 text-white rounded-xl font-bold transition-all shadow-lg active:scale-95">確認綁定</button>
                 </form>
               </GlassCard>
             </div>
 
-            {/* 買家列表呈現 */}
             <div className="lg:col-span-9 space-y-6">
               {buyers.map(buyer => {
-                // 從資源池中抓出所有綁定到該買家的人員 (不管是經理還是員工)
                 const boundUsers = users.filter(u => u.buyerId === buyer.id);
-                
                 return (
-                  <div key={buyer.id} className="bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden shadow-xl">
-                    <div className="p-4 sm:p-5 flex items-center justify-between bg-gradient-to-r from-rose-900/30 to-transparent border-b border-rose-500/20 gap-4 overflow-x-auto">
+                  <div key={buyer.id} className="bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 overflow-hidden shadow-2xl">
+                    <div className="p-4 sm:p-5 flex items-center justify-between bg-gradient-to-r from-rose-900/40 to-transparent border-b border-rose-500/30 gap-4 overflow-x-auto">
                       <div className="flex items-center space-x-3 shrink-0">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center shadow-lg"><Crown className="w-5 h-5 text-white" /></div>
-                        <h3 className="text-xl font-bold whitespace-nowrap text-rose-100">{buyer.name}</h3>
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-400 to-rose-600 flex items-center justify-center shadow-lg border border-rose-300/30"><Crown className="w-5 h-5 text-white" /></div>
+                        <h3 className="text-xl font-bold whitespace-nowrap text-white">{buyer.name}</h3>
                       </div>
                       <div className="flex items-center gap-4 shrink-0">
-                        <div className="flex items-center space-x-2 bg-black/20 p-2 pl-4 rounded-xl border border-white/5"><span className="text-sm text-gray-400 shrink-0">儲值金額</span><TrackedInput className="text-rose-300 font-bold" value={buyer.cnyAmount} onChange={v => handleUpdateField('buyers', buyer.id, 'cnyAmount', v)} suffix="CNY" /></div>
-                        <div className="flex items-center space-x-2 bg-black/20 p-2 pl-4 rounded-xl border border-white/5"><span className="text-sm text-gray-400 shrink-0">餘額</span><TrackedInput className="text-yellow-400 font-bold" value={buyer.balance} onChange={v => handleUpdateField('buyers', buyer.id, 'balance', v)} /></div>
-                        <button onClick={() => handleDeleteDoc('buyers', buyer)} className="p-2.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl transition-all shrink-0 ml-1"><Trash2 className="w-5 h-5" /></button>
+                        <div className="flex items-center space-x-2 bg-black/40 p-2 pl-4 rounded-xl border border-white/10 shadow-inner"><span className="text-sm text-gray-300 shrink-0">儲值金額</span><TrackedInput className="text-rose-300 font-bold" value={buyer.cnyAmount} onChange={v => handleUpdateField('buyers', buyer.id, 'cnyAmount', v)} suffix="CNY" /></div>
+                        <div className="flex items-center space-x-2 bg-black/40 p-2 pl-4 rounded-xl border border-white/10 shadow-inner"><span className="text-sm text-gray-300 shrink-0">餘額</span><TrackedInput className="text-yellow-400 font-bold" value={buyer.balance} onChange={v => handleUpdateField('buyers', buyer.id, 'balance', v)} /></div>
+                        <button onClick={() => handleDeleteDoc('buyers', buyer)} className="p-2.5 bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-400/20 rounded-xl transition-all shrink-0 ml-1 shadow-md"><Trash2 className="w-5 h-5" /></button>
                       </div>
                     </div>
                     
-                    {/* 綁定人員列表 (扁平化顯示) */}
                     <div className="p-4">
-                      {boundUsers.length === 0 ? <div className="text-gray-500 text-sm italic ml-2">尚未綁定任何代練人員</div> : 
+                      {boundUsers.length === 0 ? <div className="text-gray-400 text-sm italic ml-2">尚未綁定任何代練人員</div> : 
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                           {boundUsers.map(user => (
-                            <div key={user.id} className="bg-black/20 rounded-xl border border-white/5 p-3 flex items-center justify-between group hover:bg-white/5 transition-colors">
+                            <div key={user.id} className="bg-black/30 rounded-xl border border-white/10 p-3 flex items-center justify-between group hover:bg-white/20 transition-all shadow-sm">
                               <div className="flex items-center gap-3">
-                                {user.role === 'manager' ? <Briefcase className="w-4 h-4 text-purple-400" /> : <Users className="w-4 h-4 text-gray-400" />}
+                                <div className="p-1.5 bg-white/5 rounded-lg border border-white/10">
+                                  {user.role === 'manager' ? <Briefcase className="w-4 h-4 text-purple-300" /> : <Users className="w-4 h-4 text-gray-300" />}
+                                </div>
                                 <div>
-                                  <div className="font-medium text-gray-200 leading-tight">{user.name}</div>
-                                  <div className="text-[10px] text-gray-500">{user.role === 'manager' ? '系統經理' : '系統員工'}</div>
+                                  <div className="font-medium text-gray-100 leading-tight">{user.name}</div>
+                                  <div className="text-[10px] text-gray-400 mt-0.5">{user.role === 'manager' ? '系統經理' : '系統員工'}</div>
                                 </div>
                               </div>
-                              <button onClick={() => handleUnbindUser(user)} className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg transition-all opacity-0 group-hover:opacity-100" title="解除綁定">
+                              <button onClick={() => handleUnbindUser(user)} className="p-2 bg-red-500/20 text-red-300 hover:bg-red-500/40 rounded-lg transition-all opacity-0 group-hover:opacity-100 border border-red-400/20" title="解除綁定">
                                 <Link className="w-4 h-4 line-through" />
                               </button>
                             </div>
