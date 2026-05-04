@@ -11,7 +11,7 @@ const LOG_WEBHOOK = "https://discord.com/api/webhooks/1499763356540604550/mjn_Md
 const ACTION_WEBHOOK = "https://discord.com/api/webhooks/1499763359783059626/ZHT9MIQHuhX1pjjC_HUOwxmNxFintLYfeQf3ydfjYYtePh27vxXzRJstuG0dVoceO_f-";
 
 // ============================================================================
-// 👉 Firebase 專案設定 (已更新為 Wolf 的真實金鑰)
+// 👉 Firebase 專案設定 
 // ============================================================================
 const firebaseConfig = {
   apiKey: "AIzaSyC3OyRHBo7iz2uU0udL60ru99CQZCk1b0A",
@@ -26,7 +26,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const usersCollection = collection(db, 'users');
-const buyersCollection = collection(db, 'buyers'); // 買家資料庫
+const buyersCollection = collection(db, 'buyers'); 
 // ============================================================================
 
 const logWebhook = (msg) => {
@@ -91,20 +91,17 @@ const AddHourInline = ({ onAdd }) => {
 
 // --- 主應用程式 ---
 export default function App() {
-  const [activeTab, setActiveTab] = useState('salary'); // 'salary' 薪資結算 | 'buyer' 買家資訊
+  const [activeTab, setActiveTab] = useState('salary'); 
 
-  // 資料狀態
-  const [users, setUsers] = useState([]); // 包含經理、員工
-  const [buyers, setBuyers] = useState([]); // 買家
+  const [users, setUsers] = useState([]); 
+  const [buyers, setBuyers] = useState([]); 
   const [exchangeRates, setExchangeRates] = useState({ usd: null, cny: null });
   const [loading, setLoading] = useState(true);
   
-  // 表單狀態
   const [newUser, setNewUser] = useState({ name: '', role: 'employee', managerId: '', buyerId: '', cutHours: 1, hourlyWage: 100 });
   const [newBuyer, setNewBuyer] = useState({ name: '', cnyAmount: 0, balance: 0 });
   const [modal, setModal] = useState({ isOpen: false, user: null });
 
-  // 取得即時匯率
   useEffect(() => {
     fetch('https://open.er-api.com/v6/latest/USD')
       .then(res => res.json())
@@ -114,14 +111,13 @@ export default function App() {
           const usdToCny = data.rates.CNY;
           setExchangeRates({ 
             usd: usdToPhp, 
-            cny: usdToCny ? (usdToPhp / usdToCny) : null // 換算 CNY to PHP
+            cny: usdToCny ? (usdToPhp / usdToCny) : null 
           });
         }
       })
       .catch(console.error);
   }, []);
 
-  // 監聽 Firebase 資料
   useEffect(() => {
     const unsubUsers = onSnapshot(usersCollection, (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -137,7 +133,6 @@ export default function App() {
 
   const managers = useMemo(() => users.filter(u => u.role === 'manager'), [users]);
 
-  // --- 新增買家 ---
   const handleAddBuyer = async (e) => {
     e.preventDefault();
     if (!newBuyer.name) return alert('請輸入買家名稱');
@@ -153,7 +148,6 @@ export default function App() {
     } catch (err) { console.error(err); alert("新增買家失敗"); }
   };
 
-  // --- 新增人員 (員工/經理) ---
   const handleAddUser = async (e) => {
     e.preventDefault();
     if (!newUser.name) return alert('請輸入名稱');
@@ -164,12 +158,11 @@ export default function App() {
     if (newUser.role === 'employee') {
       if (!newUser.managerId) return alert('請選擇所屬經理');
       userObj.managerId = newUser.managerId;
-      userObj.cutHours = Number(newUser.cutHours) || 0; // 固定時數
+      userObj.cutHours = Number(newUser.cutHours) || 0; 
       const manager = users.find(u => u.id === newUser.managerId);
       logWebhook(`新增員工: ${newUser.name} (所屬經理: ${manager?.name}, 固定抽成: ${newUser.cutHours} h)`);
       actionWebhook(`👥 **新增員工**\n> 名字：${newUser.name}\n> 所屬經理：${manager?.name}\n> 固定抽成：${newUser.cutHours} h`);
     } else {
-      // 只有在買家分頁新增經理時才強制檢查 buyerId
       if (activeTab === 'buyer' && !newUser.buyerId) return alert('請選擇所屬買家');
       userObj.buyerId = newUser.buyerId || '';
       userObj.bonusPhp = 0;
@@ -183,7 +176,6 @@ export default function App() {
     } catch (error) { alert("新增失敗"); }
   };
 
-  // --- 刪除與更新功能 ---
   const handleDeleteDoc = async (collectionName, item) => {
     if (collectionName === 'buyers') {
       const hasManagers = users.some(u => u.buyerId === item.id);
@@ -206,7 +198,6 @@ export default function App() {
     catch (error) { console.error("更新失敗", error); }
   };
 
-  // --- 結算功能 ---
   const handleAddHours = async (userId, addedHours) => {
     const user = users.find(u => u.id === userId);
     if (!user) return;
@@ -220,19 +211,21 @@ export default function App() {
     try {
       if (user.role === 'manager') {
         const selfPhp = user.pendingHours * user.hourlyWage;
+        const totalPhp = selfPhp + (user.bonusPhp || 0);
         await updateDoc(doc(db, 'users', user.id), { pendingHours: 0, bonusPhp: 0 });
-        logWebhook(`結算經理: ${user.name}`);
+        logWebhook(`結算經理: ${user.name} (總發放: ${totalPhp} PHP)`);
       } else {
         const grossHours = user.pendingHours;
-        const cutHours = Math.min(grossHours, user.cutHours); // 固定抽成時數 (最多抽全部)
+        const cutHours = Math.min(grossHours, user.cutHours); 
         const netHours = grossHours - cutHours;
         
         const managerBonusPhp = cutHours * user.hourlyWage;
+        const employeePayoutPhp = netHours * user.hourlyWage;
         const manager = users.find(u => u.id === user.managerId);
         
         await updateDoc(doc(db, 'users', user.id), { pendingHours: 0 });
-        if (manager) await updateDoc(doc(db, 'users', manager.id), { bonusPhp: manager.bonusPhp + managerBonusPhp });
-        logWebhook(`結算員工: ${user.name} (原時數: ${grossHours}h, 實得: ${netHours}h, 經理分紅: ${managerBonusPhp} PHP)`);
+        if (manager) await updateDoc(doc(db, 'users', manager.id), { bonusPhp: (manager.bonusPhp || 0) + managerBonusPhp });
+        logWebhook(`結算員工: ${user.name} (原時數: ${grossHours}h, 實得: ${netHours}h = ${employeePayoutPhp} PHP, 經理分紅: ${managerBonusPhp} PHP)`);
       }
       setModal({ isOpen: false, user: null });
     } catch (error) { alert("結算失敗！"); }
@@ -246,6 +239,55 @@ export default function App() {
         input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
       `}</style>
+
+      {/* 遺失的結算確認彈窗 Modal (已加回並更新為固定時數算法) */}
+      {modal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md transition-all">
+          <div className="bg-[#1c1c1e]/95 border border-white/10 rounded-[32px] p-8 max-w-md w-full shadow-2xl">
+            <h3 className="text-2xl font-bold mb-6 text-white border-b border-white/10 pb-4">結算明細確認</h3>
+            
+            <div className="mb-8 space-y-4 text-lg">
+              <p className="text-gray-400">對象：<strong className="text-blue-400 text-xl">{modal.user?.name}</strong></p>
+              
+              {modal.user?.role === 'employee' && (
+                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-3 font-mono text-base">
+                  <div className="flex justify-between"><span className="text-gray-400">總時數</span><span className="text-white">{modal.user.pendingHours.toFixed(1)} h</span></div>
+                  <div className="flex justify-between text-purple-400">
+                    <span>固定抽成給經理</span>
+                    <span>- {Math.min(modal.user.pendingHours, modal.user.cutHours).toFixed(1)} h</span>
+                  </div>
+                  <div className="border-t border-white/10 pt-2 flex justify-between font-bold">
+                    <span className="text-gray-200">實得時數</span>
+                    <span className="text-blue-300">{(modal.user.pendingHours - Math.min(modal.user.pendingHours, modal.user.cutHours)).toFixed(1)} h</span>
+                  </div>
+                  <div className="flex justify-between"><span className="text-gray-400">約定時薪</span><span className="text-white">× {modal.user.hourlyWage} PHP</span></div>
+                  <div className="border-t border-blue-500/30 pt-3 flex justify-between font-bold text-xl text-green-400 mt-2">
+                    <span>員工發放金額</span>
+                    <span>{((modal.user.pendingHours - Math.min(modal.user.pendingHours, modal.user.cutHours)) * modal.user.hourlyWage).toFixed(0)} PHP</span>
+                  </div>
+                </div>
+              )}
+
+              {modal.user?.role === 'manager' && (
+                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-3 font-mono text-base">
+                  <div className="flex justify-between"><span className="text-gray-400">代打時數 ({modal.user.pendingHours.toFixed(1)}h)</span><span className="text-white">× {modal.user.hourlyWage} PHP</span></div>
+                  <div className="flex justify-between text-blue-300"><span>自身代打薪資</span><span>= {(modal.user.pendingHours * modal.user.hourlyWage).toFixed(0)} PHP</span></div>
+                  <div className="flex justify-between text-purple-400"><span>累積員工分紅</span><span>+ {(modal.user.bonusPhp || 0).toFixed(0)} PHP</span></div>
+                  <div className="border-t border-blue-500/30 pt-3 flex justify-between font-bold text-xl text-green-400 mt-2">
+                    <span>經理發放總額</span>
+                    <span>{((modal.user.pendingHours * modal.user.hourlyWage) + (modal.user.bonusPhp || 0)).toFixed(0)} PHP</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex space-x-3">
+              <button onClick={() => setModal({ isOpen: false, user: null })} className="flex-1 py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all">取消</button>
+              <button onClick={confirmSettle} disabled={modal.user?.pendingHours === 0 && modal.user?.bonusPhp === 0} className="flex-1 py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed">確認結算歸零</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 頂端匯率列 */}
       <div className="bg-white/5 border-b border-white/10 backdrop-blur-md px-6 py-2 flex flex-wrap justify-center items-center gap-6 relative z-20 text-sm">
