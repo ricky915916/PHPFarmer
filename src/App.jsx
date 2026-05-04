@@ -11,7 +11,7 @@ const LOG_WEBHOOK = "https://discord.com/api/webhooks/1499763356540604550/mjn_Md
 const ACTION_WEBHOOK = "https://discord.com/api/webhooks/1499763359783059626/ZHT9MIQHuhX1pjjC_HUOwxmNxFintLYfeQf3ydfjYYtePh27vxXzRJstuG0dVoceO_f-";
 
 // ============================================================================
-// 👉 Firebase 專案設定 
+// 👉 Firebase 專案設定
 // ============================================================================
 const firebaseConfig = {
   apiKey: "AIzaSyC3OyRHBo7iz2uU0udL60ru99CQZCk1b0A",
@@ -98,7 +98,8 @@ export default function App() {
   const [exchangeRates, setExchangeRates] = useState({ usd: null, cny: null });
   const [loading, setLoading] = useState(true);
   
-  const [newUser, setNewUser] = useState({ name: '', role: 'employee', managerId: '', buyerId: '', cutHours: 1, hourlyWage: 100 });
+  // 更新 newUser 狀態：將 cutHours 變更為 cutPerHour (預設抽 5 塊)
+  const [newUser, setNewUser] = useState({ name: '', role: 'employee', managerId: '', buyerId: '', cutPerHour: 5, hourlyWage: 70 });
   const [newBuyer, setNewBuyer] = useState({ name: '', cnyAmount: 0, balance: 0 });
   const [modal, setModal] = useState({ isOpen: false, user: null });
 
@@ -158,10 +159,10 @@ export default function App() {
     if (newUser.role === 'employee') {
       if (!newUser.managerId) return alert('請選擇所屬經理');
       userObj.managerId = newUser.managerId;
-      userObj.cutHours = Number(newUser.cutHours) || 0; 
+      userObj.cutPerHour = Number(newUser.cutPerHour) || 0; 
       const manager = users.find(u => u.id === newUser.managerId);
-      logWebhook(`新增員工: ${newUser.name} (所屬經理: ${manager?.name}, 固定抽成: ${newUser.cutHours} h)`);
-      actionWebhook(`👥 **新增員工**\n> 名字：${newUser.name}\n> 所屬經理：${manager?.name}\n> 固定抽成：${newUser.cutHours} h`);
+      logWebhook(`新增員工: ${newUser.name} (所屬經理: ${manager?.name}, 每小抽成: ${newUser.cutPerHour} PHP)`);
+      actionWebhook(`👥 **新增員工**\n> 名字：${newUser.name}\n> 所屬經理：${manager?.name}\n> 每小時抽成：${newUser.cutPerHour} PHP/h`);
     } else {
       if (activeTab === 'buyer' && !newUser.buyerId) return alert('請選擇所屬買家');
       userObj.buyerId = newUser.buyerId || '';
@@ -172,7 +173,7 @@ export default function App() {
 
     try {
       await setDoc(doc(db, 'users', id), userObj);
-      setNewUser({ name: '', role: 'employee', managerId: '', buyerId: '', cutHours: 1, hourlyWage: 100 });
+      setNewUser({ name: '', role: 'employee', managerId: '', buyerId: '', cutPerHour: 5, hourlyWage: 70 });
     } catch (error) { alert("新增失敗"); }
   };
 
@@ -216,16 +217,18 @@ export default function App() {
         logWebhook(`結算經理: ${user.name} (總發放: ${totalPhp} PHP)`);
       } else {
         const grossHours = user.pendingHours;
-        const cutHours = Math.min(grossHours, user.cutHours); 
-        const netHours = grossHours - cutHours;
+        const cutAmountPerHour = user.cutPerHour ?? user.cutHours ?? 0; // 支援舊資料
         
-        const managerBonusPhp = cutHours * user.hourlyWage;
-        const employeePayoutPhp = netHours * user.hourlyWage;
+        // 經理分紅 = 總時數 * 每小時抽成
+        const managerBonusPhp = grossHours * cutAmountPerHour;
+        // 員工實得 = 總時數 * (時薪 - 每小時抽成)
+        const employeePayoutPhp = grossHours * (user.hourlyWage - cutAmountPerHour);
+        
         const manager = users.find(u => u.id === user.managerId);
         
         await updateDoc(doc(db, 'users', user.id), { pendingHours: 0 });
         if (manager) await updateDoc(doc(db, 'users', manager.id), { bonusPhp: (manager.bonusPhp || 0) + managerBonusPhp });
-        logWebhook(`結算員工: ${user.name} (原時數: ${grossHours}h, 實得: ${netHours}h = ${employeePayoutPhp} PHP, 經理分紅: ${managerBonusPhp} PHP)`);
+        logWebhook(`結算員工: ${user.name} (原時數: ${grossHours}h, 實得: ${employeePayoutPhp} PHP, 經理分紅: ${managerBonusPhp} PHP)`);
       }
       setModal({ isOpen: false, user: null });
     } catch (error) { alert("結算失敗！"); }
@@ -240,54 +243,64 @@ export default function App() {
         input[type="number"] { -moz-appearance: textfield; }
       `}</style>
 
-      {/* 遺失的結算確認彈窗 Modal (已加回並更新為固定時數算法) */}
-      {modal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md transition-all">
-          <div className="bg-[#1c1c1e]/95 border border-white/10 rounded-[32px] p-8 max-w-md w-full shadow-2xl">
-            <h3 className="text-2xl font-bold mb-6 text-white border-b border-white/10 pb-4">結算明細確認</h3>
-            
-            <div className="mb-8 space-y-4 text-lg">
-              <p className="text-gray-400">對象：<strong className="text-blue-400 text-xl">{modal.user?.name}</strong></p>
+      {/* 結算確認彈窗 Modal (已更新為最新 每小時抽成金額 計算邏輯) */}
+      {modal.isOpen && (() => {
+        const user = modal.user;
+        const grossHours = user?.pendingHours || 0;
+        const cut = user?.cutPerHour ?? user?.cutHours ?? 0;
+        const wage = user?.hourlyWage || 0;
+        
+        const managerBonusPhp = grossHours * cut;
+        const employeePayoutPhp = grossHours * (wage - cut);
+        
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md transition-all">
+            <div className="bg-[#1c1c1e]/95 border border-white/10 rounded-[32px] p-8 max-w-md w-full shadow-2xl">
+              <h3 className="text-2xl font-bold mb-6 text-white border-b border-white/10 pb-4">結算明細確認</h3>
               
-              {modal.user?.role === 'employee' && (
-                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-3 font-mono text-base">
-                  <div className="flex justify-between"><span className="text-gray-400">總時數</span><span className="text-white">{modal.user.pendingHours.toFixed(1)} h</span></div>
-                  <div className="flex justify-between text-purple-400">
-                    <span>固定抽成給經理</span>
-                    <span>- {Math.min(modal.user.pendingHours, modal.user.cutHours).toFixed(1)} h</span>
+              <div className="mb-8 space-y-4 text-lg">
+                <p className="text-gray-400">對象：<strong className="text-blue-400 text-xl">{user?.name}</strong></p>
+                
+                {user?.role === 'employee' && (
+                  <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-3 font-mono text-base">
+                    <div className="flex justify-between"><span className="text-gray-400">總時數</span><span className="text-white">{grossHours.toFixed(1)} h</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">約定時薪</span><span className="text-white">{wage} PHP/h</span></div>
+                    <div className="border-t border-white/10 pt-2 flex justify-between font-bold text-gray-300">
+                      <span>打單總金額</span>
+                      <span>{(grossHours * wage).toFixed(0)} PHP</span>
+                    </div>
+                    <div className="flex justify-between text-purple-400">
+                      <span>經理抽成 ({cut} PHP/h)</span>
+                      <span>- {managerBonusPhp.toFixed(0)} PHP</span>
+                    </div>
+                    <div className="border-t border-blue-500/30 pt-3 flex justify-between font-bold text-xl text-green-400 mt-2">
+                      <span>員工發放金額</span>
+                      <span>{employeePayoutPhp.toFixed(0)} PHP</span>
+                    </div>
                   </div>
-                  <div className="border-t border-white/10 pt-2 flex justify-between font-bold">
-                    <span className="text-gray-200">實得時數</span>
-                    <span className="text-blue-300">{(modal.user.pendingHours - Math.min(modal.user.pendingHours, modal.user.cutHours)).toFixed(1)} h</span>
-                  </div>
-                  <div className="flex justify-between"><span className="text-gray-400">約定時薪</span><span className="text-white">× {modal.user.hourlyWage} PHP</span></div>
-                  <div className="border-t border-blue-500/30 pt-3 flex justify-between font-bold text-xl text-green-400 mt-2">
-                    <span>員工發放金額</span>
-                    <span>{((modal.user.pendingHours - Math.min(modal.user.pendingHours, modal.user.cutHours)) * modal.user.hourlyWage).toFixed(0)} PHP</span>
-                  </div>
-                </div>
-              )}
+                )}
 
-              {modal.user?.role === 'manager' && (
-                <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-3 font-mono text-base">
-                  <div className="flex justify-between"><span className="text-gray-400">代打時數 ({modal.user.pendingHours.toFixed(1)}h)</span><span className="text-white">× {modal.user.hourlyWage} PHP</span></div>
-                  <div className="flex justify-between text-blue-300"><span>自身代打薪資</span><span>= {(modal.user.pendingHours * modal.user.hourlyWage).toFixed(0)} PHP</span></div>
-                  <div className="flex justify-between text-purple-400"><span>累積員工分紅</span><span>+ {(modal.user.bonusPhp || 0).toFixed(0)} PHP</span></div>
-                  <div className="border-t border-blue-500/30 pt-3 flex justify-between font-bold text-xl text-green-400 mt-2">
-                    <span>經理發放總額</span>
-                    <span>{((modal.user.pendingHours * modal.user.hourlyWage) + (modal.user.bonusPhp || 0)).toFixed(0)} PHP</span>
+                {user?.role === 'manager' && (
+                  <div className="bg-black/30 p-4 rounded-2xl border border-white/5 space-y-3 font-mono text-base">
+                    <div className="flex justify-between"><span className="text-gray-400">代打時數 ({grossHours.toFixed(1)}h)</span><span className="text-white">× {wage} PHP</span></div>
+                    <div className="flex justify-between text-blue-300"><span>自身代打薪資</span><span>= {(grossHours * wage).toFixed(0)} PHP</span></div>
+                    <div className="flex justify-between text-purple-400"><span>累積員工分紅</span><span>+ {(user.bonusPhp || 0).toFixed(0)} PHP</span></div>
+                    <div className="border-t border-blue-500/30 pt-3 flex justify-between font-bold text-xl text-green-400 mt-2">
+                      <span>經理發放總額</span>
+                      <span>{((grossHours * wage) + (user.bonusPhp || 0)).toFixed(0)} PHP</span>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
 
-            <div className="flex space-x-3">
-              <button onClick={() => setModal({ isOpen: false, user: null })} className="flex-1 py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all">取消</button>
-              <button onClick={confirmSettle} disabled={modal.user?.pendingHours === 0 && modal.user?.bonusPhp === 0} className="flex-1 py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed">確認結算歸零</button>
+              <div className="flex space-x-3">
+                <button onClick={() => setModal({ isOpen: false, user: null })} className="flex-1 py-3 px-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all">取消</button>
+                <button onClick={confirmSettle} disabled={user?.pendingHours === 0 && user?.bonusPhp === 0} className="flex-1 py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed">確認結算歸零</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 頂端匯率列 */}
       <div className="bg-white/5 border-b border-white/10 backdrop-blur-md px-6 py-2 flex flex-wrap justify-center items-center gap-6 relative z-20 text-sm">
@@ -340,7 +353,7 @@ export default function App() {
                     <button type="button" className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${newUser.role === 'manager' ? 'bg-white/10 shadow-sm' : 'text-gray-400 hover:text-white'}`} onClick={() => setNewUser({...newUser, role: 'manager'})}>經理</button>
                   </div>
                   <input type="text" placeholder="人員名稱" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} />
-                  <div><label className="block text-xs text-gray-400 mb-1 ml-1">約定時薪 (PHP)</label><input type="number" min="0" placeholder="100" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50" value={newUser.hourlyWage} onChange={e => setNewUser({...newUser, hourlyWage: e.target.value})} /></div>
+                  <div><label className="block text-xs text-gray-400 mb-1 ml-1">約定時薪 (PHP)</label><input type="number" min="0" placeholder="70" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50" value={newUser.hourlyWage} onChange={e => setNewUser({...newUser, hourlyWage: e.target.value})} /></div>
                   
                   {newUser.role === 'employee' && (
                     <>
@@ -348,7 +361,7 @@ export default function App() {
                         <option value="">選擇所屬經理...</option>
                         {managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
-                      <div><label className="block text-xs text-gray-400 mb-1 ml-1">固定抽成時數 (h)</label><input type="number" min="0" step="0.5" placeholder="1" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50" value={newUser.cutHours} onChange={e => setNewUser({...newUser, cutHours: e.target.value})} /></div>
+                      <div><label className="block text-xs text-gray-400 mb-1 ml-1">每小時抽成 (PHP)</label><input type="number" min="0" placeholder="5" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50" value={newUser.cutPerHour} onChange={e => setNewUser({...newUser, cutPerHour: e.target.value})} /></div>
                     </>
                   )}
                   <button type="submit" className="w-full py-3 px-4 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl font-semibold transition-all">新增</button>
@@ -384,7 +397,7 @@ export default function App() {
                             <div className="flex items-center space-x-2"><Users className="w-5 h-5 text-gray-400 shrink-0" /><span className="font-medium whitespace-nowrap">{employee.name}</span></div>
                             <div className="flex items-center gap-2 border-l border-white/10 pl-3">
                               <div className="flex items-center space-x-1"><span className="text-xs text-gray-400 shrink-0">時薪</span><TrackedInput className="text-emerald-300" value={employee.hourlyWage} onChange={v => handleUpdateField('users', employee.id, 'hourlyWage', v)} suffix="PHP" /></div>
-                              <div className="flex items-center space-x-1"><span className="text-xs text-gray-400 shrink-0">抽成(固定)</span><TrackedInput className="text-purple-300" value={employee.cutHours} onChange={v => handleUpdateField('users', employee.id, 'cutHours', v)} suffix="h" /></div>
+                              <div className="flex items-center space-x-1"><span className="text-xs text-gray-400 shrink-0">每小抽成</span><TrackedInput className="text-purple-300" value={employee.cutPerHour ?? employee.cutHours ?? 0} onChange={v => handleUpdateField('users', employee.id, 'cutPerHour', v)} suffix="PHP" /></div>
                             </div>
                           </div>
                           <div className="flex items-center gap-3 shrink-0">
