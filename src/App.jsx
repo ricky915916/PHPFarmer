@@ -99,10 +99,11 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   
   const [newUser, setNewUser] = useState({ name: '', role: 'employee', managerId: '', cutPerHour: 5, hourlyWage: 70 });
-  const [newBuyer, setNewBuyer] = useState({ name: '', cnyAmount: 0, balance: 0 });
+  const [newBuyer, setNewBuyer] = useState({ name: '' });
   
-  // 買家綁定表單狀態
+  // 買家綁定表單與各買家當前選擇幣種狀態
   const [bindForm, setBindForm] = useState({ buyerId: '', userId: '' });
+  const [buyerCurrencies, setBuyerCurrencies] = useState({}); // { buyerId: 'cny' | 'twd' | 'usd' }
   
   const [modal, setModal] = useState({ isOpen: false, user: null });
 
@@ -164,7 +165,7 @@ export default function App() {
     } catch (error) { alert("新增失敗"); }
   };
 
-  // --- 買家分頁：新增買家 ---
+  // --- 買家分頁：新增買家 (加入三種幣種初始值) ---
   const handleAddBuyer = async (e) => {
     e.preventDefault();
     if (!newBuyer.name) return alert('請輸入買家名稱');
@@ -172,11 +173,12 @@ export default function App() {
     try {
       await setDoc(doc(db, 'buyers', id), {
         name: newBuyer.name,
-        cnyAmount: Number(newBuyer.cnyAmount) || 0,
-        balance: Number(newBuyer.balance) || 0
+        cnyAmount: 0, twdAmount: 0, usdAmount: 0,
+        cnyBalance: 0, twdBalance: 0, usdBalance: 0,
+        balance: 0 // 為了向下相容保留舊欄位
       });
       logWebhook(`新增買家: ${newBuyer.name}`);
-      setNewBuyer({ name: '', cnyAmount: 0, balance: 0 });
+      setNewBuyer({ name: '' });
     } catch (err) { console.error(err); alert("新增買家失敗"); }
   };
 
@@ -229,6 +231,11 @@ export default function App() {
   const handleUpdateField = async (collectionName, id, field, value) => {
     try { await updateDoc(doc(db, collectionName, id), { [field]: value }); } 
     catch (error) { console.error("更新失敗", error); }
+  };
+
+  // 處理買家幣種切換
+  const handleBuyerCurrency = (buyerId, cur) => {
+    setBuyerCurrencies(prev => ({...prev, [buyerId]: cur}));
   };
 
   const handleAddHours = async (userId, addedHours) => {
@@ -324,7 +331,7 @@ export default function App() {
         );
       })()}
 
-      {/* 頂端匯率列 (強化毛玻璃與陰影) */}
+      {/* 頂端匯率列 */}
       <div className="bg-white/10 border-b border-white/20 backdrop-blur-2xl px-6 py-3 flex flex-wrap justify-center items-center gap-6 relative z-20 text-sm shadow-md">
         <div className="flex items-center space-x-2">
           <Globe className="w-4 h-4 text-emerald-400" />
@@ -338,7 +345,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* 背景環境光暈 (增強亮度與範圍，提升毛玻璃折射對比) */}
+      {/* 背景環境光暈 */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-500/30 rounded-full blur-[120px] mix-blend-screen"></div>
         <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] bg-blue-500/30 rounded-full blur-[120px] mix-blend-screen"></div>
@@ -346,7 +353,6 @@ export default function App() {
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto p-6 md:p-10 pt-6">
-        {/* 標題與分頁切換 */}
         <header className="mb-8">
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-br from-white to-gray-400 bg-clip-text text-transparent mb-6 drop-shadow-sm">
             代練管理中樞
@@ -474,6 +480,15 @@ export default function App() {
             <div className="lg:col-span-9 space-y-6">
               {buyers.map(buyer => {
                 const boundUsers = users.filter(u => u.buyerId === buyer.id);
+                // 取得當前買家選中的幣種 (預設為 cny)
+                const currentCurrency = buyerCurrencies[buyer.id] || 'cny';
+                const amountField = `${currentCurrency}Amount`;
+                const balanceField = `${currentCurrency}Balance`;
+                
+                // 針對舊資料 CNY 進行向下相容處理
+                const displayAmount = buyer[amountField] || 0;
+                const displayBalance = buyer[balanceField] !== undefined ? buyer[balanceField] : (currentCurrency === 'cny' ? (buyer.balance || 0) : 0);
+
                 return (
                   <div key={buyer.id} className="bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 overflow-hidden shadow-2xl">
                     <div className="p-4 sm:p-5 flex items-center justify-between bg-gradient-to-r from-rose-900/40 to-transparent border-b border-rose-500/30 gap-4 overflow-x-auto">
@@ -481,9 +496,41 @@ export default function App() {
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-400 to-rose-600 flex items-center justify-center shadow-lg border border-rose-300/30"><Crown className="w-5 h-5 text-white" /></div>
                         <h3 className="text-xl font-bold whitespace-nowrap text-white">{buyer.name}</h3>
                       </div>
-                      <div className="flex items-center gap-4 shrink-0">
-                        <div className="flex items-center space-x-2 bg-black/40 p-2 pl-4 rounded-xl border border-white/10 shadow-inner"><span className="text-sm text-gray-300 shrink-0">儲值金額</span><TrackedInput className="text-rose-300 font-bold" value={buyer.cnyAmount} onChange={v => handleUpdateField('buyers', buyer.id, 'cnyAmount', v)} suffix="CNY" /></div>
-                        <div className="flex items-center space-x-2 bg-black/40 p-2 pl-4 rounded-xl border border-white/10 shadow-inner"><span className="text-sm text-gray-300 shrink-0">餘額</span><TrackedInput className="text-yellow-400 font-bold" value={buyer.balance} onChange={v => handleUpdateField('buyers', buyer.id, 'balance', v)} /></div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        
+                        {/* 帶有幣種選擇的儲值區塊 */}
+                        <div className="flex items-center space-x-2 bg-black/40 p-1.5 pl-3 rounded-xl border border-white/10 shadow-inner">
+                          <select 
+                            value={currentCurrency}
+                            onChange={e => handleBuyerCurrency(buyer.id, e.target.value)}
+                            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-rose-200 focus:outline-none focus:ring-1 focus:ring-rose-500/50 cursor-pointer appearance-none text-center"
+                          >
+                            <option value="cny" className="text-black">CNY</option>
+                            <option value="twd" className="text-black">TWD</option>
+                            <option value="usd" className="text-black">USD</option>
+                          </select>
+                          <span className="text-sm text-gray-300 shrink-0">儲值</span>
+                          <TrackedInput 
+                            className="text-rose-300 font-bold" 
+                            value={displayAmount} 
+                            onChange={v => handleUpdateField('buyers', buyer.id, amountField, v)} 
+                            onCommitChange={(oldV, newV) => logWebhook(`修改: 買家 ${buyer.name} 儲值(${currentCurrency.toUpperCase()}) 由 ${oldV} 改為 ${newV}`)}
+                          />
+                        </div>
+
+                        {/* 獨立切換的餘額區塊 */}
+                        <div className="flex items-center space-x-2 bg-black/40 p-2 pl-4 rounded-xl border border-white/10 shadow-inner">
+                          <span className="text-sm text-gray-300 shrink-0">餘額</span>
+                          <TrackedInput 
+                            className="text-yellow-400 font-bold" 
+                            value={displayBalance} 
+                            onChange={v => {
+                              handleUpdateField('buyers', buyer.id, balanceField, v);
+                              if (currentCurrency === 'cny') handleUpdateField('buyers', buyer.id, 'balance', v); // 向下相容同步更新舊欄位
+                            }} 
+                            onCommitChange={(oldV, newV) => logWebhook(`修改: 買家 ${buyer.name} 餘額(${currentCurrency.toUpperCase()}) 由 ${oldV} 改為 ${newV}`)}
+                          />
+                        </div>
                         <button onClick={() => handleDeleteDoc('buyers', buyer)} className="p-2.5 bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-400/20 rounded-xl transition-all shrink-0 ml-1 shadow-md"><Trash2 className="w-5 h-5" /></button>
                       </div>
                     </div>
